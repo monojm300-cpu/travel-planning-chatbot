@@ -1,5 +1,6 @@
-
 import re
+from datetime import date, timedelta
+
 import streamlit as st
 
 st.set_page_config(
@@ -16,44 +17,64 @@ DESTINATIONS = {
         "transport": ["Bus", "Train", "Flight"],
         "hotel": "Budget hotels and beachside stays",
         "places": ["Baga Beach", "Fort Aguada", "Basilica of Bom Jesus", "Local markets"],
-        "food": "Goan cuisine and seafood"
+        "food": "Goan cuisine and seafood",
+        "color": "0ea5e9",
+        "tagline": "Beaches, sunsets and seafood"
     },
     "Manali": {
         "budget": 15000,
         "transport": ["Bus", "Train + Taxi", "Flight + Taxi"],
         "hotel": "Budget hotels and mountain homestays",
         "places": ["Hadimba Temple", "Solang Valley", "Mall Road", "Old Manali"],
-        "food": "Himachali and North Indian food"
+        "food": "Himachali and North Indian food",
+        "color": "6366f1",
+        "tagline": "Snow-capped mountains and valleys"
     },
     "Jaipur": {
         "budget": 9000,
         "transport": ["Bus", "Train", "Flight"],
         "hotel": "Budget hotels and heritage guesthouses",
         "places": ["Hawa Mahal", "Amber Fort", "City Palace", "Jantar Mantar"],
-        "food": "Rajasthani thali and local street food"
+        "food": "Rajasthani thali and local street food",
+        "color": "f97316",
+        "tagline": "Forts, palaces and pink-city charm"
     },
     "Kerala": {
         "budget": 16000,
         "transport": ["Bus", "Train", "Flight"],
         "hotel": "Hotels, homestays and resorts",
         "places": ["Alleppey backwaters", "Munnar tea gardens", "Fort Kochi", "Spice markets"],
-        "food": "Traditional Kerala cuisine"
+        "food": "Traditional Kerala cuisine",
+        "color": "16a34a",
+        "tagline": "Backwaters and tea-garden greens"
     },
     "Ooty": {
         "budget": 8000,
         "transport": ["Bus", "Train + Taxi", "Car"],
         "hotel": "Budget hotels and hill-view homestays",
         "places": ["Botanical Garden", "Ooty Lake", "Doddabetta Peak", "Nilgiri Mountain Railway"],
-        "food": "South Indian food and local chocolates"
+        "food": "South Indian food and local chocolates",
+        "color": "0d9488",
+        "tagline": "Hill-station views and toy trains"
     },
     "Bengaluru": {
         "budget": 7000,
         "transport": ["Bus", "Train", "Flight"],
         "hotel": "Budget hotels and city guesthouses",
         "places": ["Lalbagh Garden", "Cubbon Park", "Bengaluru Palace", "Commercial Street"],
-        "food": "South Indian cuisine and local cafes"
+        "food": "South Indian cuisine and local cafes",
+        "color": "a855f7",
+        "tagline": "Gardens, cafes and city life"
     }
 }
+
+
+def destination_image(name, width=400, height=220):
+    """Return a lightweight, always-available placeholder banner for a destination."""
+    color = DESTINATIONS[name]["color"]
+    label = name.replace(" ", "+")
+    return f"https://placehold.co/{width}x{height}/{color}/ffffff?text={label}"
+
 
 # ---------------- INTENT DETECTION ----------------
 
@@ -208,7 +229,8 @@ if "messages" not in st.session_state:
             "Hello! Welcome to the Travel Planning Chatbot. "
             "Where would you like to travel? You can choose Goa, "
             "Manali, Jaipur, Kerala, Ooty or Bengaluru. "
-            "You can also tell me your budget."
+            "You can also tell me your budget, or use the quick-fill "
+            "form in the sidebar instead of typing."
         )
     }]
 
@@ -272,7 +294,7 @@ def chatbot_response(message):
         return (
             "Which destination are you interested in? Choose Goa, Manali, "
             "Jaipur, Kerala, Ooty or Bengaluru. You can also share your "
-            "budget for destination suggestions."
+            "budget for destination suggestions, or use the sidebar form."
         )
 
     destination = trip["Destination"]
@@ -323,22 +345,46 @@ def chatbot_response(message):
     )
 
 
+def push_assistant_message(content):
+    st.session_state.messages.append({"role": "assistant", "content": content})
+
+
 # ---------------- STREAMLIT USER INTERFACE ----------------
 
-st.title("Travel Planning Chatbot")
+st.title("✈️ Travel Planning Chatbot")
 st.caption("CA3 Project | Intent detection | Entity extraction | Multi-turn conversation")
 
 with st.expander("How to use this chatbot"):
     st.write(
         "Tell the chatbot your destination, budget, dates, trip duration, "
-        "transport and hotel preference. Type 'show plan' to review your "
-        "details or 'reset' to start over."
+        "transport and hotel preference by typing in the chat box, or fill "
+        "in the quick-fill form in the sidebar. Type 'show plan' to review "
+        "your details or 'reset' to start over."
     )
     st.info(
         "This project uses sample destinations and illustrative estimates. "
         "It does not check live prices or make bookings."
     )
 
+# ---- Destination gallery (dynamic banner images) ----
+if st.session_state.trip["Destination"]:
+    chosen = st.session_state.trip["Destination"]
+    st.image(
+        destination_image(chosen, width=900, height=260),
+        caption=f"{chosen} — {DESTINATIONS[chosen]['tagline']}",
+        use_container_width=True
+    )
+else:
+    st.write("#### Explore destinations")
+    gallery_cols = st.columns(3)
+    for index, name in enumerate(DESTINATIONS):
+        with gallery_cols[index % 3]:
+            st.image(destination_image(name), use_container_width=True)
+            st.caption(f"**{name}** — {DESTINATIONS[name]['tagline']}")
+
+st.divider()
+
+# ---- Chat history ----
 for item in st.session_state.messages:
     with st.chat_message(item["role"]):
         st.markdown(item["content"])
@@ -352,14 +398,82 @@ if prompt:
         st.markdown(prompt)
 
     answer = chatbot_response(prompt)
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+    push_assistant_message(answer)
 
     with st.chat_message("assistant"):
         st.markdown(answer)
 
+# ---------------- SIDEBAR: QUICK-FILL FORM + TRIP SUMMARY ----------------
+
 with st.sidebar:
+    st.header("Quick Trip Form")
+    st.caption("Prefer clicking over typing? Fill this in and apply it to the chat.")
+
+    with st.form("quick_trip_form"):
+        destination_choice = st.selectbox(
+            "Destination",
+            options=["-- Select --"] + list(DESTINATIONS.keys()),
+            index=0
+        )
+
+        budget_choice = st.number_input(
+            "Budget per person (₹)",
+            min_value=0,
+            max_value=200000,
+            step=500,
+            value=int(st.session_state.trip["Budget"] or 0)
+        )
+
+        date_choice = st.date_input(
+            "Travel date",
+            value=date.today() + timedelta(days=7),
+            min_value=date.today()
+        )
+
+        duration_choice = st.slider(
+            "Duration (days)",
+            min_value=1,
+            max_value=14,
+            value=int(st.session_state.trip["Duration"] or 3)
+        )
+
+        transport_choice = st.selectbox(
+            "Transport",
+            options=["Bus", "Train", "Flight", "Car", "Bike", "Taxi"]
+        )
+
+        hotel_choice = st.selectbox(
+            "Accommodation",
+            options=["Budget", "Luxury", "Resort / Homestay / Hostel", "No preference"]
+        )
+
+        submitted = st.form_submit_button("Apply to trip", use_container_width=True)
+
+        if submitted:
+            trip = st.session_state.trip
+            if destination_choice != "-- Select --":
+                trip["Destination"] = destination_choice
+            if budget_choice > 0:
+                trip["Budget"] = int(budget_choice)
+            trip["Date"] = date_choice.strftime("%B %d, %Y")
+            trip["Duration"] = duration_choice
+            trip["Transport Type"] = transport_choice
+            trip["Hotel"] = hotel_choice
+
+            push_assistant_message(
+                "Got it — I've updated your trip details from the quick-fill form. "
+                "Type **show plan** to see the full itinerary, or keep chatting to change anything."
+            )
+            st.rerun()
+
+    st.divider()
+
     st.header("Your Trip Details")
-    for key, value in st.session_state.trip.items():
+    trip = st.session_state.trip
+    filled = sum(1 for value in trip.values() if value is not None)
+    st.progress(filled / len(trip), text=f"{filled} of {len(trip)} details filled")
+
+    for key, value in trip.items():
         st.write(f"**{key}:** {value if value is not None else 'Not provided'}")
 
     if st.button("Reset conversation", use_container_width=True):
